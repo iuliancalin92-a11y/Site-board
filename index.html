@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Site Board</title>
+<meta name="theme-color" content="#1B2328">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Site Board">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one narrow column like a site clipboard: who you are, alerts, tabs, then the order queues */
+:root{
+  --bg:#E9ECEE; --panel:#FFFFFF; --ink:#1B2328; --muted:#5E6A72; --line:#CDD3D7;
+  --accent:#1F4E79; --accent-ink:#FFFFFF; --tape:#F2B705;
+  --urg1:#C8321E; --urg1-bg:#FBE3DF; --urg2:#B26A00; --urg2-bg:#FCEFD3; --urg3:#4D5B64; --urg3-bg:#E3E8EB;
+  --ok:#1E7A46; --ok-bg:#DDF1E5; --pending:#6B4FA0; --pending-bg:#ECE6F6;
+  --font-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#13181B;--panel:#1C2328;--ink:#E7ECEF;--muted:#9AA7AF;--line:#2E383E;
+  --accent:#6FA8DC;--accent-ink:#0E1A24;--tape:#F2C230;
+  --urg1:#FF8A78;--urg1-bg:#3A1E1A;--urg2:#F2B65A;--urg2-bg:#352A15;--urg3:#AEBBC3;--urg3-bg:#263037;
+  --ok:#6FD39A;--ok-bg:#16301F;--pending:#B9A3E6;--pending-bg:#2A2340;color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.45;-webkit-text-size-adjust:100%}
+.wrap{max-width:720px;margin:0 auto;display:grid;gap:18px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:max(16px,env(safe-area-inset-top,0px));padding-bottom:max(40px,calc(24px + env(safe-area-inset-bottom,0px)))}
+h1,h2{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.02em;margin:0;text-wrap:balance}
+h1{font-size:2rem;line-height:1}
+h2{font-size:1.25rem;display:flex;align-items:center;gap:8px}
+.count{font-family:var(--font-mono);font-size:.8rem;background:var(--ink);color:var(--bg);border-radius:4px;padding:1px 7px}
+.tape{height:8px;background:repeating-linear-gradient(-45deg,var(--tape) 0 14px,var(--ink) 14px 28px);border-radius:2px}
+.sub{color:var(--muted);margin:0}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+header{display:grid;gap:10px}
+.hrow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.me{display:flex;align-items:center;gap:8px;font-size:.9rem;color:var(--muted)}
+.me b{color:var(--ink)}
+.link{background:none;border:0;color:var(--accent);font:600 .9rem var(--font-body);padding:6px 0;cursor:pointer}
+
+.panel{display:grid;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+label{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+input,textarea{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+textarea{min-height:84px;resize:vertical}
+input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px solid var(--tape);outline-offset:2px}
+.field{display:grid;gap:5px}
+.btn{font:600 1rem var(--font-body);border:0;border-radius:8px;padding:12px 16px;cursor:pointer;background:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.msg{font-size:.88rem;color:var(--muted);min-height:1.2em;margin:0}
+.err{color:var(--urg1)}
+.roles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.roles button{font:600 .95rem var(--font-body);padding:10px 6px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
+.roles button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+.notice{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;border-radius:10px;padding:12px 14px;font-size:.9rem;background:var(--urg2-bg);color:var(--urg2)}
+.notice.on{background:var(--ok-bg);color:var(--ok)}
+.notice p{margin:0;flex:1 1 220px}
+.notice button{font:600 .9rem var(--font-body);border-radius:8px;padding:9px 12px;border:0;background:var(--ink);color:var(--bg);cursor:pointer}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:500 .85rem var(--font-body);border:1px dashed var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:6px 10px;cursor:pointer}
+.chip[aria-pressed="true"]{border-style:solid;border-color:var(--accent);background:var(--accent);color:var(--accent-ink)}
+.builder{display:grid;gap:8px;background:var(--bg);border-radius:8px;padding:10px}
+.addrow{display:flex;flex-wrap:wrap;gap:6px;align-items:stretch}
+.addrow input{width:80px;flex:0 0 80px;background:var(--panel);font-family:var(--font-mono);text-align:center}
+.units{display:flex;gap:4px;flex:1 1 auto;flex-wrap:wrap}
+.units button{font:600 .9rem var(--font-body);padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.units button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{font:600 1rem var(--font-mono);min-width:48px;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px}
+.tabs button{font:700 1.05rem var(--font-display);text-transform:uppercase;letter-spacing:.03em;padding:10px;border:0;border-radius:7px;background:transparent;color:var(--muted);cursor:pointer;display:flex;justify-content:center;align-items:center;gap:8px}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+.tabs button[aria-selected="true"] .count{background:var(--bg);color:var(--ink)}
+
+section{display:grid;gap:10px}
+.list{display:grid;gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:8px;border-left:6px solid var(--line)}
+.card.u1{border-left-color:var(--urg1)}.card.u2{border-left-color:var(--urg2)}.card.u3{border-left-color:var(--urg3)}
+.card.pending{border-left-color:var(--pending)}.card.done{border-left-color:var(--ok)}
+.card.fresh{animation:flash 1.6s ease-out}
+@keyframes flash{from{box-shadow:0 0 0 3px var(--tape)}to{box-shadow:0 0 0 0 transparent}}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.what{font-weight:600;font-size:1.02rem;white-space:pre-wrap;overflow-wrap:anywhere;min-width:0;flex:1 1 200px}
+.pill{font:700 .78rem var(--font-body);text-transform:uppercase;letter-spacing:.05em;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.p-u1{background:var(--urg1-bg);color:var(--urg1)}.p-u2{background:var(--urg2-bg);color:var(--urg2)}.p-u3{background:var(--urg3-bg);color:var(--urg3)}
+.p-pending{background:var(--pending-bg);color:var(--pending)}.p-done{background:var(--ok-bg);color:var(--ok)}.p-no{background:var(--urg3-bg);color:var(--urg3)}
+.meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.88rem;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:600}
+.times{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.82rem;color:var(--muted)}
+.actions{display:flex;flex-wrap:wrap;gap:6px}
+.actions button{font:600 .92rem var(--font-body);border-radius:8px;padding:10px 12px;cursor:pointer;border:1px solid transparent}
+.a-u1{background:var(--urg1);color:#fff}.a-u2{background:var(--urg2);color:#fff}.a-u3{background:var(--urg3);color:var(--panel)}
+.a-no{background:transparent;color:var(--muted);border-color:var(--line)!important}
+.a-done{background:var(--ok);color:#fff;flex:1 1 100%;font-size:1.05rem!important;padding:14px!important}
+.a-done.confirm{background:var(--tape);color:#1B2328}
+.empty{border:1px dashed var(--line);border-radius:10px;padding:16px;color:var(--muted);font-size:.92rem}
+.banner{background:var(--urg2-bg);color:var(--urg2);border-radius:8px;padding:10px 12px;font-size:.9rem}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media (max-width:560px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:2px;min-width:0}
+.stat .v{font:700 1.7rem var(--font-display);line-height:1.1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.stat .k{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+details summary{cursor:pointer;color:var(--muted);font-weight:600}
+@media (prefers-reduced-motion:reduce){.card.fresh{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="tape" aria-hidden="true"></div>
+    <div class="hrow">
+      <h1>Site Board</h1>
+      <div class="me" id="meBox" hidden><span id="meText"></span><button class="link" id="switchBtn" type="button">Switch</button></div>
+    </div>
+  </header>
+
+  <!-- Join -->
+  <form class="panel" id="join" hidden autocomplete="off">
+    <h2>Join the board</h2>
+    <p class="sub">Enter your name and the code your manager gave you.</p>
+    <div class="field">
+      <label for="jName">Your name</label>
+      <input id="jName" autocomplete="name" placeholder="e.g. Iulian">
+    </div>
+    <div class="field">
+      <label id="jRoleLbl">I am a</label>
+      <div class="roles" role="group" aria-labelledby="jRoleLbl" id="jRoles">
+        <button type="button" data-role="dryliner">Dryliner</button>
+        <button type="button" data-role="manager">Manager</button>
+        <button type="button" data-role="labourer">Labourer</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="jCode" id="jCodeLbl">Site code</label>
+      <input id="jCode" inputmode="numeric" autocomplete="off">
+    </div>
+    <button class="btn" id="jGo" type="submit">Join</button>
+    <p class="msg" id="jMsg" role="status"></p>
+  </form>
+
+  <!-- Main -->
+  <div id="main" hidden style="display:grid;gap:18px">
+    <div class="notice" id="notice" hidden><p id="noticeText"></p><button type="button" id="noticeBtn" hidden></button></div>
+    <div id="banner" class="banner" hidden></div>
+
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="tabBoard" aria-selected="true">Orders</button>
+      <button type="button" role="tab" id="tabToday" aria-selected="false">Delivered today <span class="count mono" id="cDoneTab">0</span></button>
+    </div>
+
+    <form id="orderForm" class="panel" autocomplete="off">
+      <h2>New order</h2>
+      <div class="field">
+        <label for="what">Materials needed</label>
+        <textarea id="what" placeholder="e.g. 12.5mm Fireline – 2 pallets"></textarea>
+      </div>
+      <div class="builder">
+        <label id="addlbl">Quick add</label>
+        <div class="chips" id="chips" role="group" aria-labelledby="addlbl"></div>
+        <div class="addrow">
+          <input id="qty" type="number" inputmode="numeric" min="1" value="1" aria-label="Quantity">
+          <div class="units" id="units" role="group" aria-label="Unit"></div>
+          <button type="button" class="btn" id="addLine" style="padding:8px 18px">Add</button>
+        </div>
+      </div>
+      <div class="field">
+        <label id="blklbl">Block</label>
+        <div class="seg" id="blocks" role="group" aria-labelledby="blklbl"></div>
+      </div>
+      <div class="field">
+        <label id="flrlbl">Floor</label>
+        <div class="seg" id="floors" role="group" aria-labelledby="flrlbl"></div>
+      </div>
+      <div class="field">
+        <label for="detail">Extra detail (optional)</label>
+        <input id="detail" placeholder="e.g. flat 12, by the stairs">
+      </div>
+      <button class="btn" id="send" type="submit">Post order</button>
+      <p class="msg" id="formMsg" role="status"></p>
+    </form>
+
+    <section id="secPending">
+      <h2>Waiting for manager <span class="count mono" id="cPending">0</span></h2>
+      <div class="list" id="listPending"></div>
+    </section>
+
+    <section id="secQueue">
+      <h2>To deliver <span class="count mono" id="cQueue">0</span></h2>
+      <div class="list" id="listQueue"></div>
+    </section>
+
+    <section id="secDone" hidden>
+      <h2>Delivered today <span class="count mono" id="cDone">0</span></h2>
+      <p class="sub" id="todayDate"></p>
+      <div class="stats" id="todayStats"></div>
+      <div class="list" id="listDone"></div>
+    </section>
+
+    <details id="secOld">
+      <summary>Earlier days and declined orders</summary>
+      <div class="list" id="listOld" style="margin-top:10px"></div>
+    </details>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
