@@ -38,11 +38,28 @@
   const isToday = (ms) => new Date(ms).toDateString() === new Date().toDateString();
   const dayLabel = (ms) => new Date(ms).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 
+  // ---------- role links: ?join=labourer&code=4242 ----------
+  const params = new URLSearchParams(location.search);
+  let link = null;
+  if (ROLE_LABEL[params.get("join")]) {
+    link = { role: params.get("join"), code: params.get("code") || "" };
+    store.set("link", link);                       // Android shares this with the installed app
+  } else if (store.get("link")) link = store.get("link");
+
   // ---------- join ----------
-  let jRole = "dryliner";
+  let jRole = link ? link.role : "dryliner";
+  let quick = !!link;                              // name-only join from a role link
   function drawJoinRoles() {
     document.querySelectorAll("#jRoles button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.role === jRole)));
     $("jCodeLbl").textContent = jRole === "manager" ? "Manager code" : "Site code";
+    const hasCode = quick && link && link.code && link.role === jRole;
+    $("jRoleField").hidden = quick;
+    $("jCodeField").hidden = !!hasCode;
+    $("jAs").hidden = !quick;
+    $("jAs").textContent = "Joining as " + ROLE_LABEL[jRole];
+    if (hasCode) $("jCode").value = link.code;
+    document.querySelector("#join .sub").textContent = hasCode ? "Type your name and tap Join."
+      : quick ? "Type your name and the manager code." : "Enter your name and the code your manager gave you.";
   }
   document.querySelectorAll("#jRoles button").forEach((b) => b.addEventListener("click", () => { jRole = b.dataset.role; drawJoinRoles(); }));
   $("join").addEventListener("submit", async (e) => {
@@ -63,7 +80,7 @@
     start();
   });
   $("switchBtn").addEventListener("click", () => {
-    jRole = me ? me.role : "dryliner";
+    jRole = me ? me.role : "dryliner"; quick = false;
     $("jName").value = me ? me.name : ""; $("jCode").value = "";
     $("main").hidden = true; $("meBox").hidden = true; $("join").hidden = false; drawJoinRoles();
   });
@@ -181,33 +198,59 @@
 
   // ---------- cards ----------
   function metaItem(label, val) { const s = el("span"); s.append(label + " "); s.appendChild(el("b", null, val)); return s; }
+  const partialOpen = {}, drafts = {}, armedCancel = {};
+  const isMine = (o) => (o.by_name || "").trim().toLowerCase() === (me.name || "").trim().toLowerCase();
+  function twoTap(store_, id, label, confirmLabel, cls, onGo) {
+    const b = el("button", cls, store_[id] ? confirmLabel : label); b.type = "button";
+    if (store_[id]) b.classList.add("confirm");
+    b.addEventListener("click", () => {
+      if (!store_[id]) { store_[id] = setTimeout(() => { delete store_[id]; render(); }, 4000); render(); return; }
+      clearTimeout(store_[id]); delete store_[id]; onGo(b);
+    });
+    return b;
+  }
   function card(o, mode) {
     const created = t(o.created_at);
+    const open = o.status === "approved" || o.status === "partial";
     const c = el("article", "card");
     if (o.status === "pending") c.classList.add("pending");
-    else if (o.status === "approved") c.classList.add("u" + (o.urgency || 3));
+    else if (open) c.classList.add("u" + (o.urgency || 3));
     else if (o.status === "delivered") c.classList.add("done");
+    else c.classList.add("closed");
     if (!firstPaint && !seen.has(o.id)) c.classList.add("fresh");
 
     const top = el("div", "top");
     top.appendChild(el("div", "what", o.what || ""));
-    const pill = o.status === "pending" ? el("span", "pill p-pending", "Needs approval")
-      : o.status === "approved" ? el("span", "pill p-u" + (o.urgency || 3), URG[o.urgency || 3])
-      : o.status === "delivered" ? el("span", "pill p-done", "Delivered") : el("span", "pill p-no", "Declined");
-    top.appendChild(pill); c.appendChild(top);
+    const pills = el("div", "pills");
+    if (o.status === "pending") pills.appendChild(el("span", "pill p-pending", "Needs approval"));
+    if (open) pills.appendChild(el("span", "pill p-u" + (o.urgency || 3), URG[o.urgency || 3]));
+    if (o.status === "partial") pills.appendChild(el("span", "pill p-part", "Part delivered"));
+    if (o.status === "delivered") pills.appendChild(el("span", "pill p-done", o.partial_note ? "Done (in parts)" : "Delivered"));
+    if (o.status === "declined") pills.appendChild(el("span", "pill p-no", "Declined"));
+    if (o.status === "cancelled") pills.appendChild(el("span", "pill p-no", "Cancelled"));
+    top.appendChild(pills); c.appendChild(top);
 
     const meta = el("div", "meta");
     meta.appendChild(metaItem("To", "Block " + o.block + " · Floor " + o.floor + (o.detail ? " · " + o.detail : "")));
     meta.appendChild(metaItem("For", o.by_name || "Someone"));
     c.appendChild(meta);
 
+    if (o.partial_note) {
+      const pn = el("div", "partnote");
+      pn.appendChild(el("b", null, o.status === "delivered" ? "Delivered in parts" : "Delivered so far"));
+      pn.appendChild(el("div", null, o.partial_note));
+      c.appendChild(pn);
+    }
+
     const times = el("div", "times mono");
     times.appendChild(el("span", null, "Ordered " + (isToday(created) ? "" : dayLabel(created) + " ") + hhmm(created)));
     if (o.approved_at) times.appendChild(el("span", null, (o.status === "declined" ? "Declined " : "Accepted ") + hhmm(t(o.approved_at)) + (o.approved_by ? " by " + o.approved_by : "")));
     if (o.status === "delivered" && o.delivered_at) {
-      times.appendChild(el("span", null, "Delivered " + hhmm(t(o.delivered_at)) + (o.delivered_by ? " by " + o.delivered_by : "")));
+      times.appendChild(el("span", null, (o.partial_note ? "Finished " : "Delivered ") + hhmm(t(o.delivered_at)) + (o.delivered_by ? " by " + o.delivered_by : "")));
       times.appendChild(el("span", null, "Took " + dur(t(o.delivered_at) - created)));
-    } else if (o.status === "pending" || o.status === "approved") {
+    } else if (o.status === "cancelled" && o.cancelled_at) {
+      times.appendChild(el("span", null, "Cancelled " + hhmm(t(o.cancelled_at)) + (o.cancelled_by ? " by " + o.cancelled_by : "")));
+    } else if (o.status === "pending" || open) {
       times.appendChild(el("span", null, "Waiting " + dur(Date.now() - created)));
     }
     c.appendChild(times);
@@ -223,22 +266,53 @@
     if (mode === "queue" && me.role === "manager") {
       [1, 2, 3].filter((u) => u !== o.urgency).forEach((u) => { const b = el("button", "a-no", "Change to " + URG[u]); b.type = "button";
         b.addEventListener("click", () => act(o.id, { urgency: u }, b)); a.appendChild(b); });
+      if (o.status === "partial") {
+        const b = el("button", "a-no", "Close – rest not needed"); b.type = "button";
+        b.addEventListener("click", () => act(o.id, { status: "delivered", delivered_at: now(), delivered_by: me.name + " (closed)" }, b)); a.appendChild(b);
+      }
     }
-    if (mode === "queue" && me.role === "labourer") {
-      const b = el("button", "a-done", armed[o.id] ? "Tap again to confirm delivered" : "Delivered"); b.type = "button";
-      if (armed[o.id]) b.classList.add("confirm");
-      b.addEventListener("click", () => {
-        if (!armed[o.id]) { armed[o.id] = setTimeout(() => { delete armed[o.id]; render(); }, 4000); render(); return; }
-        clearTimeout(armed[o.id]); delete armed[o.id];
-        act(o.id, { status: "delivered", delivered_at: now(), delivered_by: me.name }, b);
-      });
-      a.appendChild(b);
+    if (mode === "queue" && me.role === "labourer" && !partialOpen[o.id]) {
+      a.appendChild(twoTap(armed, o.id, o.status === "partial" ? "Rest delivered" : "Delivered all", "Tap again to confirm delivered", "a-done",
+        (b) => act(o.id, { status: "delivered", delivered_at: now(), delivered_by: me.name }, b)));
+      const pb = el("button", "a-part", "Part delivered"); pb.type = "button";
+      pb.addEventListener("click", () => { partialOpen[o.id] = true; render(); setTimeout(() => { const ta = document.getElementById("pn-" + o.id); if (ta) ta.focus(); }, 30); });
+      a.appendChild(pb);
     }
-    if (mode === "done" && (me.role === "manager" || me.role === "labourer")) {
+    // cancel: managers any open order, dryliners their own
+    const canCancel = (o.status === "pending" || open) && (mode === "pending" || mode === "queue") &&
+      (me.role === "manager" || (me.role === "dryliner" && isMine(o)));
+    if (canCancel && !partialOpen[o.id]) {
+      a.appendChild(twoTap(armedCancel, o.id, "Cancel order", "Tap again to cancel order", "a-cancel",
+        (b) => act(o.id, { status: "cancelled", cancelled_at: now(), cancelled_by: me.name }, b)));
+    }
+    if (mode === "done" && o.status === "delivered" && (me.role === "manager" || me.role === "labourer")) {
       const b = el("button", "a-no", "Undo delivered"); b.type = "button";
-      b.addEventListener("click", () => act(o.id, { status: "approved", delivered_at: null, delivered_by: null }, b)); a.appendChild(b);
+      b.addEventListener("click", () => act(o.id, { status: o.partial_note ? "partial" : "approved", delivered_at: null, delivered_by: null }, b)); a.appendChild(b);
     }
     if (a.childNodes.length) c.appendChild(a);
+
+    if (mode === "queue" && me.role === "labourer" && partialOpen[o.id]) {
+      const f = el("div", "partform");
+      const lb = el("label", null, "What did you bring?"); lb.htmlFor = "pn-" + o.id; f.appendChild(lb);
+      const ta = el("textarea", "pnote"); ta.id = "pn-" + o.id; ta.value = drafts[o.id] || "";
+      ta.placeholder = "e.g. 1 pallet 12.5mm Fireline. Other pallet not in stock";
+      ta.addEventListener("input", () => { drafts[o.id] = ta.value; });
+      ta.addEventListener("blur", () => { if (needRender) setTimeout(render, 150); });
+      f.appendChild(ta);
+      const row = el("div", "actions");
+      const save = el("button", "a-done", "Save part delivery"); save.type = "button";
+      save.addEventListener("click", () => {
+        const txt = (drafts[o.id] || "").trim();
+        if (!txt) { ta.focus(); ta.placeholder = "Write what you brought first"; return; }
+        const line = hhmm(Date.now()) + " " + me.name + ": " + txt;
+        delete partialOpen[o.id]; delete drafts[o.id];
+        act(o.id, { status: "partial", partial_note: (o.partial_note ? o.partial_note + "\n" : "") + line, partial_at: now(), partial_by: me.name }, save);
+      });
+      const back = el("button", "a-no", "Back"); back.type = "button";
+      back.addEventListener("click", () => { delete partialOpen[o.id]; render(); });
+      row.appendChild(save); row.appendChild(back); f.appendChild(row);
+      c.appendChild(f);
+    }
     return c;
   }
   function fill(listId, items, mode, emptyText) {
@@ -248,7 +322,7 @@
   }
   function drawStats(done) {
     const box = $("todayStats"); box.replaceChildren();
-    const times = done.filter((o) => o.delivered_at).map((o) => t(o.delivered_at) - t(o.created_at));
+    const times = done.filter((o) => o.status === "delivered" && o.delivered_at).map((o) => t(o.delivered_at) - t(o.created_at));
     const avg = times.length ? times.reduce((x, y) => x + y, 0) / times.length : null;
     const slow = times.length ? Math.max.apply(null, times) : null;
     const byBlock = {}; done.forEach((o) => { byBlock[o.block] = (byBlock[o.block] || 0) + 1; });
@@ -259,12 +333,17 @@
     });
   }
 
+  let needRender = false;
   function render() {
     if (!me) return;
+    const ae = document.activeElement;
+    if (ae && ae.classList && ae.classList.contains("pnote")) { needRender = true; return; }
+    needRender = false;
     const pending = orders.filter((o) => o.status === "pending").sort((a, b) => t(a.created_at) - t(b.created_at));
-    const queue = orders.filter((o) => o.status === "approved").sort((a, b) => (a.urgency || 3) - (b.urgency || 3) || t(a.created_at) - t(b.created_at));
-    const done = orders.filter((o) => o.status === "delivered" && isToday(t(o.delivered_at) || t(o.created_at))).sort((a, b) => t(b.delivered_at) - t(a.delivered_at));
-    const old = orders.filter((o) => (o.status === "delivered" && !isToday(t(o.delivered_at) || t(o.created_at))) || o.status === "declined")
+    const queue = orders.filter((o) => o.status === "approved" || o.status === "partial").sort((a, b) => (a.urgency || 3) - (b.urgency || 3) || t(a.created_at) - t(b.created_at));
+    const doneAt = (o) => o.status === "delivered" ? t(o.delivered_at) || t(o.created_at) : t(o.partial_at);
+    const done = orders.filter((o) => (o.status === "delivered" || (o.status === "partial" && o.partial_at)) && isToday(doneAt(o))).sort((a, b) => doneAt(b) - doneAt(a));
+    const old = orders.filter((o) => (o.status === "delivered" && !isToday(doneAt(o))) || o.status === "declined" || o.status === "cancelled")
       .sort((a, b) => t(b.created_at) - t(a.created_at)).slice(0, 60);
 
     const onBoard = tab === "board";
@@ -314,5 +393,36 @@
     $("meText").textContent = me.name + " · " + ROLE_LABEL[me.role];
     drawNotice(); render(); load(); listen();
   }
-  if (me) start(); else { $("join").hidden = false; drawJoinRoles(); }
+  // ---------- install screen (role link opened in the browser) ----------
+  let deferredPrompt = null;
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredPrompt = e; if (!$("install").hidden) $("instBtn").hidden = false; });
+  function showInstall() {
+    $("install").hidden = false;
+    const steps = isIOS
+      ? ["Tap the <b>Share</b> button at the bottom of Safari (the square with an arrow).",
+         "Scroll down and tap <b>Add to Home Screen</b>, then <b>Add</b>.",
+         "Close Safari. Open <b>Site Board</b> from the new icon on your Home Screen."]
+      : ["Tap the <b>⋮</b> menu at the top right of Chrome.",
+         "Tap <b>Install app</b> or <b>Add to Home screen</b>, then <b>Install</b>.",
+         "Open <b>Site Board</b> from the new icon on your phone."];
+    const ua = navigator.userAgent;
+    const otherBrowser = isIOS && /crios|fxios|edgios|gsa\//i.test(ua);
+    $("instIntro").textContent = otherBrowser ? "Open this link in Safari first, then follow these steps."
+      : "You only do this once.";
+    if (isIOS) steps.unshift("Opened this from WhatsApp? Tap the <b>Safari</b> compass icon (or <b>⋯ → Open in Safari</b>) first.");
+    const ol = $("instSteps"); ol.replaceChildren();
+    steps.forEach((h) => { const li = document.createElement("li"); li.innerHTML = h; ol.appendChild(li); });
+    $("instBtn").hidden = !deferredPrompt;
+  }
+  $("instBtn").addEventListener("click", async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt(); try { await deferredPrompt.userChoice; } catch (e) {}
+    deferredPrompt = null; $("instBtn").hidden = true;
+    $("instIntro").textContent = "Done. Now open Site Board from the new icon on your phone.";
+  });
+  $("instSkip").addEventListener("click", () => { $("install").hidden = true; $("join").hidden = false; drawJoinRoles(); });
+
+  if (me) start();
+  else if (link && !standalone) showInstall();
+  else { $("join").hidden = false; drawJoinRoles(); }
 })();

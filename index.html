@@ -9,7 +9,12 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Site Board">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="manifest" href="manifest.webmanifest">
+<link rel="manifest" href="manifest.webmanifest" id="mf">
+<script>
+  // A role link (e.g. ?join=labourer) installs an app that opens on the same link
+  (function(){ try { var r = new URLSearchParams(location.search).get("join");
+    if (r === "labourer" || r === "dryliner" || r === "manager") document.getElementById("mf").href = "manifest-" + r + ".webmanifest"; } catch(e){} })();
+</script>
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -116,6 +121,19 @@ section{display:grid;gap:10px}
 .stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:2px;min-width:0}
 .stat .v{font:700 1.7rem var(--font-display);line-height:1.1;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .stat .k{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.steps{margin:0;padding-left:1.4em;display:grid;gap:10px;font-size:1.05rem}
+.steps li::marker{font:700 1.1rem var(--font-display)}
+.steps b{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:0 6px;white-space:nowrap}
+.joinas{margin:0;font:700 1.3rem var(--font-display);text-transform:uppercase;letter-spacing:.02em;color:var(--accent)}
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.p-part{background:var(--urg2-bg);color:var(--urg2)}
+.card.closed{border-left-color:var(--line);opacity:.8}
+.partnote{background:var(--urg2-bg);color:var(--ink);border-radius:8px;padding:8px 10px;font-size:.9rem;white-space:pre-wrap;overflow-wrap:anywhere}
+.partnote b{display:block;color:var(--urg2);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+.a-part{background:var(--urg2-bg);color:var(--urg2);flex:1 1 100%;padding:12px!important}
+.a-cancel{background:transparent;color:var(--urg1);border-color:var(--urg1)!important}
+.a-cancel.confirm{background:var(--urg1);color:#fff}
+.partform{display:grid;gap:8px;border-top:1px dashed var(--line);padding-top:10px}
 details summary{cursor:pointer;color:var(--muted);font-weight:600}
 @media (prefers-reduced-motion:reduce){.card.fresh{animation:none}}
 </style>
@@ -130,6 +148,15 @@ details summary{cursor:pointer;color:var(--muted);font-weight:600}
     </div>
   </header>
 
+  <!-- Install first (opened from a role link in the browser) -->
+  <section class="panel" id="install" hidden>
+    <h2>Put Site Board on your phone</h2>
+    <p class="sub" id="instIntro"></p>
+    <ol class="steps" id="instSteps"></ol>
+    <button class="btn" id="instBtn" type="button" hidden>Install Site Board</button>
+    <button class="link" id="instSkip" type="button">Use it here without installing</button>
+  </section>
+
   <!-- Join -->
   <form class="panel" id="join" hidden autocomplete="off">
     <h2>Join the board</h2>
@@ -138,7 +165,8 @@ details summary{cursor:pointer;color:var(--muted);font-weight:600}
       <label for="jName">Your name</label>
       <input id="jName" autocomplete="name" placeholder="e.g. Iulian">
     </div>
-    <div class="field">
+    <p class="joinas" id="jAs" hidden></p>
+    <div class="field" id="jRoleField">
       <label id="jRoleLbl">I am a</label>
       <div class="roles" role="group" aria-labelledby="jRoleLbl" id="jRoles">
         <button type="button" data-role="dryliner">Dryliner</button>
@@ -146,7 +174,7 @@ details summary{cursor:pointer;color:var(--muted);font-weight:600}
         <button type="button" data-role="labourer">Labourer</button>
       </div>
     </div>
-    <div class="field">
+    <div class="field" id="jCodeField">
       <label for="jCode" id="jCodeLbl">Site code</label>
       <input id="jCode" inputmode="numeric" autocomplete="off">
     </div>
@@ -213,7 +241,7 @@ details summary{cursor:pointer;color:var(--muted);font-weight:600}
     </section>
 
     <details id="secOld">
-      <summary>Earlier days and declined orders</summary>
+      <summary>Earlier days, declined and cancelled orders</summary>
       <div class="list" id="listOld" style="margin-top:10px"></div>
     </details>
   </div>
